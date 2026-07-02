@@ -1,42 +1,91 @@
 # Data Notes
 
-This document records the expected data structure for the Building Energy Result Analyzer project.
+This document records the data structure of the real EnergyPlus SQL export file used in this project.
 
 ## Data Source
 
-The target data source will come from building performance simulation workflows, such as:
+The current sample file is exported from an EnergyPlus / Honeybee / Grasshopper simulation workflow.
 
-- EnergyPlus SQL output
-- Honeybee simulation results
-- Grasshopper-exported tables
-- Excel or CSV files converted from simulation outputs
+The file name is:
 
-## Expected File Types
+run_sql_export.xlsx
 
-The project will first support:
+This file is a converted Excel version of an EnergyPlus SQL output. It is not a simple wide table. It contains multiple database-like sheets.
 
-- `.xlsx`
-- `.csv`
+## Workbook Structure
 
-SQL files may be processed later after the basic workflow becomes stable.
+The workbook contains 39 sheets.
 
-## Expected Fields
+Important sheets include:
 
-The exact field names will be decided after checking the real exported sample data.
+- ReportData_1
+- ReportData_2
+- ReportData_3
+- ReportDataDictionary
+- Time
+- TabularData
+- Surfaces
+- Zones
+- Materials
+- Constructions
 
-Potential fields may include:
+## Core Data Relationship
 
-- datetime
-- cooling_load
-- heating_load
-- solar_gain
-- lighting_load
-- equipment_load
-- indoor_temperature
-- case_name
+The main simulation result data is stored in:
 
-## Day 15 Notes
+- ReportData_1
+- ReportData_2
+- ReportData_3
 
-No real data has been imported yet.
+These sheets have the same columns:
 
-The focus of Day 15 is to initialize the project structure and prepare for real simulation result analysis.
+- ReportDataIndex
+- TimeIndex
+- ReportDataDictionaryIndex
+- Value
+
+The TimeIndex column links report data to the Time sheet.
+
+The ReportDataDictionaryIndex column links report data to the ReportDataDictionary sheet.
+
+Therefore, the main analysis workflow should be:
+
+ReportData sheets + Time sheet + ReportDataDictionary sheet -> cleaned analysis table -> energy metrics -> charts and reports.
+
+## Key Output Variables Found
+
+The current file includes useful building performance variables such as:
+
+- Zone Ideal Loads Supply Air Total Cooling Energy
+- Zone Ideal Loads Supply Air Total Heating Energy
+- Zone Ideal Loads Zone Total Cooling Energy
+- Zone Ideal Loads Zone Total Heating Energy
+- Enclosure Windows Total Transmitted Solar Radiation Energy
+- Zone Lights Total Heating Energy
+- Zone Electric Equipment Total Heating Energy
+- Zone People Total Heating Energy
+- Zone Mean Air Temperature
+- Zone Operative Temperature
+- Zone Air Relative Humidity
+- Surface Window Heat Gain Energy
+- Surface Window Heat Loss Energy
+- Surface Inside Face Temperature
+- Surface Outside Face Temperature
+
+## Units
+
+Many energy variables use J.
+
+For reporting, they should be converted to kWh:
+
+kWh = J / 3,600,000
+
+Temperature variables use C.
+
+Relative humidity uses %.
+
+## Git Note
+
+The original Excel file is large and should not be committed to Git.
+
+The project should keep raw simulation files locally under data/, but Git should only track code, documentation, and small sample files.

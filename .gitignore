@@ -9,3 +9,5 @@ output/*
 !output/.gitkeep
 
 *.log
+
+data/*
