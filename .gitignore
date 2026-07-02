@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+
+.DS_Store
+.vscode/
+
+output/*
+!output/.gitkeep
+
+*.log
