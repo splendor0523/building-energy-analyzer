@@ -1,0 +1,13 @@
+Today I connected the selected EnergyPlus report data with the Time table.
+
+I created a standard datetime column from the Year, Month, Day, Hour, and Minute fields.
+
+I found that the source Time sheet was missing TimeIndex 5001.
+
+I confirmed that the ReportData sheets still contained 247 records for this missing time index.
+
+I added a time table repair function and reconstructed TimeIndex 5001 as 2006-07-28 09:00:00.
+
+After the repair, all 2,163,228 selected report rows were successfully matched with datetime information.
+
+The next step is to calculate basic building energy performance indicators.

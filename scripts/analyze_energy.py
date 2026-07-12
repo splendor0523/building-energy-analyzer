@@ -68,7 +68,7 @@ def read_sheet_as_dataframe(workbook,sheet_name:str) -> pd.DataFrame: # 将sheet
     if sheet_name not in workbook.sheetnames:
         raise ValueError(f"Sheet not found:{sheet_name}")
     worksheet = workbook[sheet_name]
-    rows = list(worksheet.iter_rows(values_only=True))
+    rows = list(worksheet.iter_rows(values_only=True))   # 后续不嵌套list会更好
 
     if not rows:
         return(pd.DataFrame())
@@ -175,6 +175,18 @@ def attach_variable_info(
     
     return(merged_data)
 
+# ------ 给数据报告上加上时间信息 ------
+def attach_time_info(
+        report_data:pd.DataFrame,
+        time_table:pd.DataFrame
+) -> pd.DataFrame:
+    merged_data = report_data.merge(
+        time_table,
+        on="TimeIndex",
+        how="left",
+    )
+    return merged_data
+
 def find_missing_time_indices(time_df:pd.DataFrame) -> list[int]:
     if "TimeIndex" not in time_df.columns:
         return []
@@ -191,6 +203,114 @@ def find_missing_time_indices(time_df:pd.DataFrame) -> list[int]:
     expected = set(range(start,end + 1))
     actual = set(time_indices)
     return sorted(expected - actual)
+
+# ------ 将time时刻表转换为带有标准时间戳的Dataframe ------
+def prepare_time_table(time_df:pd.DataFrame) ->pd.DataFrame:
+    required_columns = [
+        "TimeIndex",
+        "Year",
+        "Month",
+        "Day",
+        "Hour",
+        "Minute",
+    ]
+    missing_columns = [
+        column for column in required_columns if column not in time_df.columns
+    ]
+    if missing_columns:
+        raise ValueError(
+            "Missing columns in time sheet:"+",".join(missing_columns)
+        )
+    time_table = time_df[required_columns].copy()
+    for column in required_columns:
+        time_table[column] = pd.to_numeric(time_table[column],errors="coerce")
+    
+    date_parts = pd.DataFrame(
+        {
+            "year":time_table["Year"],
+            "month":time_table["Month"],
+            "day":time_table["Day"],
+        }
+    )
+    base_date = pd.to_datetime(date_parts,errors="coerce")
+    time_table["datetime"] = (
+        base_date
+        + pd.to_timedelta(time_table["Hour"],unit="h")
+        + pd.to_timedelta(time_table["Minute"],unit="m")
+    )
+    return time_table
+
+# ------ 修补time函数 ------
+def repaired_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
+    time_table = time_table.copy()
+
+    time_table["TimeIndex"] = pd.to_numeric(
+        time_table["TimeIndex"],
+        errors="coerce"
+    )
+    time_table = time_table.dropna(subset=["TimeIndex","datetime"]) # subset为子集的意思，之看这两列，只要有NaN就整行删除
+    time_table["TimeIndex"] = time_table["TimeIndex"].astype(int)
+
+    start_index = int(time_table["TimeIndex"].min())
+    end_index = int(time_table["TimeIndex"].max())
+
+    full_time_index = pd.DataFrame(
+        {
+            "TimeIndex":range(start_index,end_index + 1)
+        }
+    )
+
+    repaired_time_table = full_time_index.merge(
+        time_table[["TimeIndex","datetime"]],
+        on="TimeIndex",
+        how="left",
+    )  
+    first_row = time_table.sort_values("TimeIndex").iloc[0]
+    first_time_index = int(first_row["TimeIndex"])
+    first_datetime = pd.to_datetime(first_row["datetime"])
+
+    repaired_time_table["datetime"] =(
+        first_datetime
+        + pd.to_timedelta(
+            repaired_time_table["TimeIndex"] - first_time_index,
+            unit="h",
+        )
+    )
+# repaired_time_table["TimeIndex"] 是一个序列：[1, 2, 3, 4, 5, ...]
+
+# first_time_index 是一个单个数字（比如 1）。
+
+# Pandas 的规则：当“一列数据”与“单个数字”运算时，把那个数字复制成跟列一样长的副本，然后第 1 行减第 1 行，第 2 行减第 2 行……
+
+# 结果得到新的序列：[0, 1, 2, 3, 4, ...]
+    is_midnight = (
+        (repaired_time_table["datetime"].dt.hour == 0)
+        &(repaired_time_table["datetime"].dt.minute == 0)
+    )
+
+    energyplus_date = repaired_time_table["datetime"].where(
+        ~is_midnight,
+        repaired_time_table["datetime"] -pd.Timedelta(days=1)
+    )
+    repaired_time_table["Year"] = energyplus_date.dt.year
+    repaired_time_table["Month"]= energyplus_date.dt.month
+    repaired_time_table["Day"] = energyplus_date.dt.day
+    repaired_time_table["Hour"] = repaired_time_table["datetime"].dt.hour
+    repaired_time_table.loc[is_midnight,"Hour"] = 24
+    repaired_time_table["Minute"] = repaired_time_table["datetime"].dt.minute
+
+    return repaired_time_table[
+        [
+            "TimeIndex",
+            "Year",
+            "Month",
+            "Day",
+            "Hour",
+            "Minute",
+            "datetime",   
+        ]
+    ]
+
 
 def build_overview_text(
     input_path: Path,
@@ -282,6 +402,16 @@ def main() -> None:
     dictionary_df = read_sheet_as_dataframe(workbook, "ReportDataDictionary")
     time_df = read_sheet_as_dataframe(workbook, "Time")
 
+# ------ 获得时间戳 ------
+
+    time_table = prepare_time_table(time_df)
+    missing_time_indices = find_missing_time_indices(time_df)
+    print(f"Missing TimeIndex before repair: {missing_time_indices}")
+
+    time_table = repaired_time_table(time_table)
+
+    print(f"Time rows after repair: {len(time_table)}")
+
 # ------ 查找关键参数index ------
     key_variables = find_key_variables(dictionary_df)  
     key_variables_indices = get_key_variable_indices(key_variables)
@@ -310,6 +440,13 @@ def main() -> None:
         report_data=selected_report_data,
         key_variables=key_variables,
     )
+    selected_report_data = attach_time_info(
+        report_data=selected_report_data,
+        time_table=time_table,
+    )
+
+    missing_datetime_count = selected_report_data["datetime"].isna().sum()
+    print(f"Rows without datetime:{missing_datetime_count}")
 
 # ------ 把已经筛选并合并好变量名称的数据，保存成 CSV 文件 ------
     selected_report_data_path = output_dir / "selected_report_data.csv"

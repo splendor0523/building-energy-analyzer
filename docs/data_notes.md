@@ -89,3 +89,22 @@ Relative humidity uses %.
 The original Excel file is large and should not be committed to Git.
 
 The project should keep raw simulation files locally under data/, but Git should only track code, documentation, and small sample files.
+## Known Time Data Issue
+
+The Time sheet in the current Excel file is missing TimeIndex 5001.
+
+The ReportData sheets still contain 247 result records for TimeIndex 5001, so these records could not initially be matched with a datetime.
+
+The missing timestamp was confirmed as:
+
+- TimeIndex: 5001
+- Date: 2006-07-28
+- Hour: 9
+- Datetime: 2006-07-28 09:00:00
+
+The analysis script detects missing TimeIndex values and reconstructs the complete hourly time table before merging it with ReportData.
+
+After reconstruction:
+
+- Time rows: 8760
+- ReportData rows without datetime: 0
