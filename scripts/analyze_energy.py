@@ -40,6 +40,9 @@ KEY_VALUABLE_NAMES = [
     "Surface Outside Face Temperature",
 ]
 
+COOLING_NAME = "Zone Ideal Loads Supply Air Total Cooling Energy"
+HEATING_NAME = "Zone Ideal Loads Supply Air Total Heating Energy"
+
 def parse_arg() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Inspect Energyplus SQL exported Excel workbook"
@@ -241,7 +244,7 @@ def prepare_time_table(time_df:pd.DataFrame) ->pd.DataFrame:
     return time_table
 
 # ------ 修补time函数 ------
-def repaired_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
+def repair_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
     time_table = time_table.copy()
 
     time_table["TimeIndex"] = pd.to_numeric(
@@ -311,6 +314,83 @@ def repaired_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
         ]
     ]
 
+# ------ 输出逐时能耗表 ------
+def create_hourly_energy_table(
+        report_data:pd.DataFrame,
+        variable_name:str,
+) -> pd.DataFrame:
+    hourly_data = (
+        report_data.loc[
+            report_data["Name"] == variable_name,
+            ["TimeIndex","datetime","Value"],
+        ]
+        .groupby(
+            ["TimeIndex","datetime"],
+            as_index=False
+        )["Value"]
+        .sum()
+        .rename(columns={"Value":"Energy_J"}) # 针对Value列改名为Energy_j
+    )
+    hourly_data["Energy_KWh"] = (
+        hourly_data["Energy_J"] / 3_600_000
+    )
+
+    return hourly_data
+
+# ------ 根据上面的逐时能耗表计算全年总能耗，最大逐时能耗以及峰值出现时间 ------
+def calculate_energy_metrics(
+        hourly_data: pd.DataFrame,
+        interval_minutes : int
+        ) -> dict:
+    annual_energy_Kwh = hourly_data["Energy_KWh"].sum()
+
+    peak_row_index = hourly_data["Energy_KWh"].idxmax()
+    peak_row = hourly_data.loc[peak_row_index]
+
+    peak_datetime_end = peak_row["datetime"]
+    peak_datetime_start = (
+        peak_datetime_end
+        - pd.Timedelta(minutes=interval_minutes)
+    )
+
+    return {
+        "annual_energy_kwh": annual_energy_Kwh,
+        "peak_hourly_energy_kwh": peak_row["Energy_KWh"],
+        "peak_datetime_start": peak_datetime_start,
+        "peak_datetime_end": peak_datetime_end,
+    }
+
+# ------ 创建指标表 ------
+def create_basic_metrics_table(
+        cooling_metrics: dict,
+        heating_metrics: dict,
+) -> pd.DataFrame:
+    metric_records = [
+        {
+            "metric": "cooling_demand",
+            "annual_energy_kwh": float(
+                cooling_metrics["annual_energy_kwh"]
+            ),
+            "peak_hourly_energy_kwh": float(
+                cooling_metrics["peak_hourly_energy_kwh"]
+            ),
+            "peak_datetime_start": cooling_metrics["peak_datetime_start"],
+            "peak_datetime_end": cooling_metrics["peak_datetime_end"],
+        },
+        {
+            "metric": "heating_demand",
+            "annual_energy_kwh": float(
+                heating_metrics["annual_energy_kwh"]
+            ),
+            "peak_hourly_energy_kwh": float(
+                heating_metrics["peak_hourly_energy_kwh"]
+            ),
+            "peak_datetime_start": heating_metrics["peak_datetime_start"],
+            "peak_datetime_end": heating_metrics["peak_datetime_end"],
+        },
+    ]  # 按行加入Pandas Dataframe，一个集合里面是一行
+
+    return pd.DataFrame(metric_records)
 
 def build_overview_text(
     input_path: Path,
@@ -402,15 +482,17 @@ def main() -> None:
     dictionary_df = read_sheet_as_dataframe(workbook, "ReportDataDictionary")
     time_df = read_sheet_as_dataframe(workbook, "Time")
 
-# ------ 获得时间戳 ------
+# ------ 获得时间戳及修复 ------
 
     time_table = prepare_time_table(time_df)
     missing_time_indices = find_missing_time_indices(time_df)
     print(f"Missing TimeIndex before repair: {missing_time_indices}")
 
-    time_table = repaired_time_table(time_table)
-
-    print(f"Time rows after repair: {len(time_table)}")
+    if missing_time_indices:
+        time_table = repair_time_table(time_table)
+        print(f"Time rows after repair: {len(time_table)}")
+    else:
+        print("Time table is complete. No repair needed.")
 
 # ------ 查找关键参数index ------
     key_variables = find_key_variables(dictionary_df)  
@@ -447,6 +529,49 @@ def main() -> None:
 
     missing_datetime_count = selected_report_data["datetime"].isna().sum()
     print(f"Rows without datetime:{missing_datetime_count}")
+
+# ------ 输出逐时能耗表 ------
+    cooling_hourly = create_hourly_energy_table(
+        report_data=selected_report_data,
+        variable_name=COOLING_NAME,
+    )
+    cooling_metrics = calculate_energy_metrics(
+        hourly_data=cooling_hourly,
+        interval_minutes=60,
+    )
+
+    heating_hourly = create_hourly_energy_table(
+        report_data=selected_report_data,
+        variable_name=HEATING_NAME
+    )
+    heating_metrics = calculate_energy_metrics(
+        hourly_data=heating_hourly,
+        interval_minutes=60,
+    )
+
+    print(cooling_hourly.head())
+    print(f"Cooling hourly rows:{len(cooling_hourly)}")
+    print("Cooling metrics:")
+    print(cooling_metrics)
+    print("Heating metrics:")
+    print(heating_metrics)
+
+# ------ 输出冷热各项指标表 ------
+    basic_metrics = create_basic_metrics_table(
+        cooling_metrics=cooling_metrics,
+        heating_metrics=heating_metrics,
+    )
+
+    basic_metrics_path = output_dir / "basic_metrics.csv"
+    basic_metrics.to_csv(
+        basic_metrics_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+
+    print("Basic energy metrics:")
+    print(basic_metrics.to_string(index=False))
+    print(f"Basic metrics saved to: {basic_metrics_path}")
 
 # ------ 把已经筛选并合并好变量名称的数据，保存成 CSV 文件 ------
     selected_report_data_path = output_dir / "selected_report_data.csv"
