@@ -42,6 +42,14 @@ KEY_VALUABLE_NAMES = [
 
 COOLING_NAME = "Zone Ideal Loads Supply Air Total Cooling Energy"
 HEATING_NAME = "Zone Ideal Loads Supply Air Total Heating Energy"
+HEAT_CONTRIBUTION_VARIABLES = {
+    "people": "Zone People Total Heating Energy",
+    "lighting": "Zone Lights Total Heating Energy",
+    "equipment": "Zone Electric Equipment Total Heating Energy",
+    "solar_transmission": (
+        "Enclosure Windows Total Transmitted Solar Radiation Energy"
+    ),
+}
 
 def parse_arg() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -64,7 +72,7 @@ def resolve_path(path_text:str) -> Path:  # 变绝对路径
 
     if not path.is_absolute():
         path = BASE_DIR / path
-    
+
     return(path)
 
 def read_sheet_as_dataframe(workbook,sheet_name:str) -> pd.DataFrame: # 将sheet页变成dataframe
@@ -75,7 +83,7 @@ def read_sheet_as_dataframe(workbook,sheet_name:str) -> pd.DataFrame: # 将sheet
 
     if not rows:
         return(pd.DataFrame())
-    
+
     header = list(rows[0])
     data = [list(row) for row in rows[1:]]
 
@@ -175,7 +183,7 @@ def attach_variable_info(
         on="ReportDataDictionaryIndex", # 以哪一列为对照，这一列相同的俩个表的数据会放在同一行
         how="left", # 左边表格的行全部保留，右边表格只负责贴信息，贴不上的就空着。
     )
-    
+
     return(merged_data)
 
 # ------ 给数据报告上加上时间信息 ------
@@ -193,13 +201,13 @@ def attach_time_info(
 def find_missing_time_indices(time_df:pd.DataFrame) -> list[int]:
     if "TimeIndex" not in time_df.columns:
         return []
-    
+
     time_indices = pd.to_numeric(time_df["TimeIndex"],errors="coerce")
     time_indices = time_indices.dropna().astype(int)
 
     if time_indices.empty:
         return []
-    
+
     start = int(time_indices.min())
     end = int(time_indices.max())
 
@@ -227,7 +235,7 @@ def prepare_time_table(time_df:pd.DataFrame) ->pd.DataFrame:
     time_table = time_df[required_columns].copy()
     for column in required_columns:
         time_table[column] = pd.to_numeric(time_table[column],errors="coerce")
-    
+
     date_parts = pd.DataFrame(
         {
             "year":time_table["Year"],
@@ -267,7 +275,7 @@ def repair_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
         time_table[["TimeIndex","datetime"]],
         on="TimeIndex",
         how="left",
-    )  
+    )
     first_row = time_table.sort_values("TimeIndex").iloc[0]
     first_time_index = int(first_row["TimeIndex"])
     first_datetime = pd.to_datetime(first_row["datetime"])
@@ -310,7 +318,7 @@ def repair_time_table(time_table:pd.DataFrame) -> pd.DataFrame:
             "Day",
             "Hour",
             "Minute",
-            "datetime",   
+            "datetime",
         ]
     ]
 
@@ -336,6 +344,57 @@ def create_hourly_energy_table(
     )
 
     return hourly_data
+
+# ------ 计算单个变量的全年累计热量 ------
+def calculate_annual_energy_kwh(
+        report_data:pd.DataFrame,
+        variable_name:str,
+) -> float:
+    hourly_data = create_hourly_energy_table(
+        report_data=report_data,
+        variable_name=variable_name,
+    )
+
+    if hourly_data.empty:
+        raise ValueError(
+            f"No report data found for variable: {variable_name}"
+        )
+
+    return float(hourly_data["Energy_KWh"].sum())
+# ------ 计算各个能耗对总能耗的贡献 ------
+def create_energy_contribution_table(
+        report_data: pd.DataFrame,
+) -> pd.DataFrame:
+    contribution_records = []
+
+    for component,variable_name in HEAT_CONTRIBUTION_VARIABLES.items():
+        annual_energy_kwh = calculate_annual_energy_kwh(
+            report_data=report_data,
+            variable_name=variable_name,
+        )
+
+        contribution_records.append({
+            "component": component,
+            "variable_name": variable_name,
+            "annual_energy_kwh": annual_energy_kwh,
+        })
+
+    contribution_table = pd.DataFrame(contribution_records)
+
+    total_energy_kwh = contribution_table["annual_energy_kwh"].sum()
+
+    if total_energy_kwh <= 0:
+        raise ValueError(
+            "Total heat contribution must be greater than zero."
+        )
+
+    contribution_table["contribution_percent"] = (
+        contribution_table["annual_energy_kwh"]
+        / total_energy_kwh
+        *100
+    )
+
+    return contribution_table
 
 # ------ 根据上面的逐时能耗表计算全年总能耗，最大逐时能耗以及峰值出现时间 ------
 def calculate_energy_metrics(
@@ -475,7 +534,7 @@ def main() -> None:
         read_only=True,
         data_only=True,
     )
-    
+
     sheet_names = workbook.sheetnames
     missing_sheets = validate_sheets(sheet_names)
 
@@ -495,7 +554,7 @@ def main() -> None:
         print("Time table is complete. No repair needed.")
 
 # ------ 查找关键参数index ------
-    key_variables = find_key_variables(dictionary_df)  
+    key_variables = find_key_variables(dictionary_df)
     key_variables_indices = get_key_variable_indices(key_variables)
     print(f"Key variable count:{len(key_variables_indices)}")
 
@@ -511,7 +570,7 @@ def main() -> None:
         print(f"Selected rows from {sheet_name}: {len(selected_report_data)}")
 
         selected_report_data_list.append(selected_report_data)
-    
+
     selected_report_data =pd.concat(  # 将列表中的所有dataframe从上到下叠罗汉合并
         selected_report_data_list,
         ignore_index=True
@@ -572,6 +631,28 @@ def main() -> None:
     print("Basic energy metrics:")
     print(basic_metrics.to_string(index=False))
     print(f"Basic metrics saved to: {basic_metrics_path}")
+
+# ------ 输出内部得热与太阳得热组成表 ------
+    energy_contribution = create_energy_contribution_table(
+        report_data=selected_report_data,
+    )
+
+    energy_contribution_path = output_dir / "energy_contribution.csv"
+    energy_contribution.to_csv(
+        energy_contribution_path,
+        index=False,
+        encoding="utf-8-sig"
+    )
+
+    print("Energy contribution:")
+    print(energy_contribution.to_string(index=False))
+    print(
+        "Contribution percent total:"
+        f"{energy_contribution["contribution_percent"].sum():.2f}%"
+    )
+    print(
+        f"Energy contribution saved to: {energy_contribution_path}"
+    )
 
 # ------ 把已经筛选并合并好变量名称的数据，保存成 CSV 文件 ------
     selected_report_data_path = output_dir / "selected_report_data.csv"
