@@ -451,6 +451,59 @@ def create_basic_metrics_table(
 
     return pd.DataFrame(metric_records)
 
+# ------ 输出以月份为单位的各项指标表 ------
+def create_monthly_energy_table(
+        cooling_hourly: pd.DataFrame,
+        heating_hourly: pd.DataFrame,
+ ) -> pd.DataFrame:
+    cooling_data = cooling_hourly.copy()
+    heating_data = heating_hourly.copy()
+
+    cooling_data["month"] = cooling_data["datetime"].dt.month
+    heating_data["month"] = heating_data["datetime"].dt.month
+
+    monthly_cooling = (
+        cooling_data
+        .groupby(
+            "month",
+            as_index=False
+        )["Energy_KWh"]
+        .sum()
+        .rename(
+            columns = {
+                "Energy_KWh" : "cooling_kwh"
+            }
+        )
+    )
+
+    monthly_heating = (
+        heating_data
+        .groupby(
+            "month",
+            as_index=False,
+        )["Energy_KWh"]
+        .sum()
+        .rename(
+            columns={
+                "Energy_KWh" : "heating_kwh"
+            }
+        )
+    )
+
+    monthly_energy = monthly_cooling.merge(
+        monthly_heating,
+        on="month",
+        how="outer"
+    )
+
+    monthly_energy = monthly_energy.sort_values(
+        "month",
+        ignore_index=True,
+    ) 
+
+    return monthly_energy
+
+
 def build_overview_text(
     input_path: Path,
     sheet_names: list[str],
@@ -607,6 +660,11 @@ def main() -> None:
         hourly_data=heating_hourly,
         interval_minutes=60,
     )
+# ------ 输出月度能耗表 ------
+    monthly_energy = create_monthly_energy_table(
+        cooling_hourly = cooling_hourly,
+        heating_hourly = heating_hourly,
+    )
 
     print(cooling_hourly.head())
     print(f"Cooling hourly rows:{len(cooling_hourly)}")
@@ -632,6 +690,18 @@ def main() -> None:
     print(basic_metrics.to_string(index=False))
     print(f"Basic metrics saved to: {basic_metrics_path}")
 
+# ------ 输出月度能耗表 ------
+    monthly_energy_path = output_dir / "monthly_energy.csv"
+
+    monthly_energy.to_csv(
+        monthly_energy_path,
+        index=False,
+        encoding = "utf-8-sig",
+    )
+  
+    print("Monthly energy:")
+    print(monthly_energy.to_string(index=False))
+    print(f"Monthly energy saved to: {monthly_energy_path}")
 # ------ 输出内部得热与太阳得热组成表 ------
     energy_contribution = create_energy_contribution_table(
         report_data=selected_report_data,
