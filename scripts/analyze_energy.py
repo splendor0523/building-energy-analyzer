@@ -503,7 +503,88 @@ def create_monthly_energy_table(
 
     return monthly_energy
 
+# ------ 峰值日筛选 ------
+def extract_peak_day_profile(
+        hourly_data:pd.DataFrame,
+        peak_datetime:pd.Timestamp,
+) -> pd.DataFrame:
+    peak_date = peak_datetime.date() # 把日期加时刻的数据，只保留日期
 
+    profile_data = hourly_data.copy()
+
+    profile_data["interval_start"] = (
+        profile_data["datetime"]
+        - pd.Timedelta(hours=1)
+    )
+    peak_day_data = profile_data[
+        profile_data["interval_start"].dt.date == peak_date
+    ].copy()
+
+    if len(peak_day_data) != 24:
+        raise ValueError(
+            f"Expected 24 hourly records for {peak_date}, "
+            f"but found {len(peak_day_data)}."
+        )
+
+    peak_day_data = peak_day_data[
+        [
+           "interval_start",
+            "datetime",
+            "Energy_KWh", 
+        ]
+    ].copy()
+    peak_day_data = peak_day_data.rename(
+        columns={
+            "Energy_KWh" : "energy_kwh"
+        }
+    )
+
+    return peak_day_data
+
+# ------ 表格增加峰值日的信息 ------
+def create_peak_day_energy_table(
+        cooling_peak_day:pd.DataFrame,
+        heating_peak_day:pd.DataFrame,
+) -> pd.DataFrame:
+    cooling_data = cooling_peak_day.copy()
+
+    cooling_data["load_type"] = "cooling"
+    cooling_data["peak_date"] = (
+        cooling_data["interval_start"].dt.date
+    )
+    cooling_data["hour"] = (
+        cooling_data["interval_start"].dt.hour
+    )
+
+    heating_data = heating_peak_day.copy()
+    heating_data["load_type"] = "heating"
+    heating_data["peak_date"] = (
+        heating_data["interval_start"].dt.date
+    )
+    heating_data["hour"] = (
+        heating_data["interval_start"].dt.hour
+    )
+
+    peak_day_energy = pd.concat(
+        [
+            cooling_data,
+            heating_data
+        ],
+        ignore_index=True
+    )
+    peak_day_energy = peak_day_energy[
+        [
+            "load_type",
+            "peak_date",
+            "hour",
+            "interval_start",
+            "datetime",
+            "energy_kwh",
+        ]
+    ]
+
+    return peak_day_energy
+    
 def build_overview_text(
     input_path: Path,
     sheet_names: list[str],
@@ -660,6 +741,40 @@ def main() -> None:
         hourly_data=heating_hourly,
         interval_minutes=60,
     )
+
+# ------ 输出冷热峰值日 ------
+    cooling_peak_day = extract_peak_day_profile(
+        hourly_data=cooling_hourly,
+        peak_datetime=cooling_metrics["peak_datetime_start"],
+    )
+    heating_peak_day = extract_peak_day_profile(
+        hourly_data=heating_hourly,
+        peak_datetime=heating_metrics["peak_datetime_start"],
+    )
+
+    print(
+        f"Cooling peak day rows: {len(cooling_peak_day)}"
+    )
+    print(
+        f"Heating peak day rows: {len(heating_peak_day)}"
+    )
+# ------ 丰富峰值日指标 ------
+    peak_day_energy = create_peak_day_energy_table(
+        cooling_peak_day=cooling_peak_day,
+        heating_peak_day=heating_peak_day,
+    )
+
+    peak_day_energy_path = output_dir / "peak_day_energy.csv"
+    peak_day_energy.to_csv(
+        peak_day_energy_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    print("Peak day energy:")
+    print(peak_day_energy.to_string(index=False))
+    print(f"Peak day energy rows: {len(peak_day_energy)}")
+    print(f"Peak day energy saved to: {peak_day_energy_path}")
+
 # ------ 输出月度能耗表 ------
     monthly_energy = create_monthly_energy_table(
         cooling_hourly = cooling_hourly,

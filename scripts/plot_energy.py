@@ -10,6 +10,9 @@ DEFAULT_OUTPUT = BASE_DIR / "output" / "energy_contribution.png"
 MONTHLY_INPUT = BASE_DIR / "output" / "monthly_energy.csv"
 MONTHLY_OUTPUT = BASE_DIR / "output" / "monthly_energy.png"
 
+PEAK_DAY_INPUT = BASE_DIR / "output" / "peak_day_energy.csv"
+PEAK_DAY_OUTPUT = BASE_DIR / "output" / "peak_day_energy.png"
+
 REQUIRED_COLUMNS = [
     "component",
     "annual_energy_kwh",
@@ -28,6 +31,13 @@ COMPONENT_LABELS = {
     "equipment": "Equipment",
     "solar_transmission": "Solar transmission",
 }
+
+PEAK_DAY_REQUIRED_COLUMNS = [
+    "load_type",
+    "peak_date",
+    "hour",
+    "energy_kwh",
+]
 
 # ------ 读取csv源数据，并安全行检查 ------
 def load_plot_data(input_path: Path,
@@ -218,6 +228,80 @@ def save_energy_contribution_chart(
     )
     plt.close(figure)
 
+# ------ 准备峰值数据 ------
+
+def prepare_peak_day_plot_data(
+        peak_day_data:pd.DataFrame,
+) -> pd.DataFrame:
+    plot_data = peak_day_data.copy()
+
+    plot_data["load_label"] = (
+        plot_data["load_type"]
+        .map(
+            {
+                "cooling":"Cooling",
+                "heating":"Heating"
+            }
+        )
+    )
+    return plot_data
+
+def save_peak_day_energy_chart(
+        plot_data:pd.DataFrame,
+        output_path:Path,
+) -> None:
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    figure,axis = plt.subplots(
+        figsize=(10,5),
+    )
+
+    cooling_data = plot_data[
+        plot_data["load_type"] == "cooling"
+    ]
+
+    heating_data = plot_data[
+        plot_data["load_type"] == "heating"
+    ]
+
+    cooling_date = cooling_data["peak_date"].iloc[0]
+    heating_date = heating_data["peak_date"].iloc[0]
+
+    axis.plot(
+        cooling_data["hour"],
+        cooling_data["energy_kwh"],
+        marker="o",
+        label=f"Cooling ({cooling_date})",
+    )
+
+    axis.plot(
+        heating_data["hour"],
+        heating_data["energy_kwh"],
+        marker="o",
+        label=f"Heating ({heating_date})",
+    )
+
+    axis.set_title(
+        "Peak Day Hourly Cooling and Heating Demand"
+    )
+
+    axis.set_xlabel("Hour")
+    axis.set_ylabel("Hourly energy demand (kWh)")
+    axis.set_xticks(range(24))
+    axis.legend() # 显示所有图例
+
+    figure.tight_layout()
+    figure.savefig(
+        output_path,
+        dpi = 300,
+        bbox_inches = "tight",
+    )
+
+    plt.close(figure)
+
 def main() -> None:
     contribution_data = load_plot_data(
         input_path=DEFAULT_INPUT,
@@ -230,6 +314,15 @@ def main() -> None:
         required_columns=MONTHLY_REQUIRED_COLUMNS,
         data_name="monthly energy file"
     )
+
+    peak_day_data = load_plot_data(
+        input_path=PEAK_DAY_INPUT,
+        required_columns=PEAK_DAY_REQUIRED_COLUMNS,
+        data_name="peak day energy file"
+    )
+
+    print("Peak day energy data loaded:")
+    print(peak_day_data.to_string(index=False))
 
     monthly_plot_data = prepare_monthly_plot_data(monthly_data=monthly_data)
 
@@ -276,6 +369,15 @@ def main() -> None:
 
     print(
         f"Monthly energy chart saved to: {MONTHLY_OUTPUT}"
+    )
+
+    peak_day_plot_data = prepare_peak_day_plot_data(peak_day_data)
+    save_peak_day_energy_chart(
+        plot_data=peak_day_plot_data,
+        output_path=PEAK_DAY_OUTPUT
+    )
+    print(
+        f"Peak day energy chart saved to: {PEAK_DAY_OUTPUT}"
     )
 
 if __name__ == "__main__":
