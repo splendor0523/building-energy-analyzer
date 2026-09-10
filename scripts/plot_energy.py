@@ -87,7 +87,7 @@ def prepare_plot_data(
         )
 
     plot_data["annual_energy_gwh"] = (
-        plot_data["annual_energy_kwh"] / 1000
+        plot_data["annual_energy_kwh"] / 1_000_000
     )
 
     return plot_data
@@ -113,8 +113,8 @@ def prepare_monthly_plot_data(
     plot_data = monthly_data.copy()
     plot_data["month_label"] = plot_data["month"].map(MONTH_LABELS)
 
-    plot_data["cooling_gwh"] = plot_data["cooling_kwh"] / 1000
-    plot_data["heating_gwh"] = plot_data["heating_kwh"] / 1000
+    plot_data["cooling_gwh"] = plot_data["cooling_kwh"] / 1_000_000
+    plot_data["heating_gwh"] = plot_data["heating_kwh"] / 1_000_000
 
     return plot_data
 

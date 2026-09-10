@@ -1,0 +1,8 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+
+data/
+
+output/selected_report_data.csv
