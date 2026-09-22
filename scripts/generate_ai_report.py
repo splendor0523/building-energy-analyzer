@@ -22,9 +22,9 @@ def load_text_file(path:Path, file_name:str) -> str:
 
     return path.read_text(encoding="utf=8")
 
-def load_report_context() -> str:
+def load_report_context(comparison_report_path:Path,) -> str:
     comparison_report = load_text_file(
-        COMPARISON_REPORT_PATH,
+        comparison_report_path,
         "Case comparison report",
     )
 
@@ -132,14 +132,28 @@ def call_deepseek(prompt:str) -> str:
 
     return report_text.strip()
 
-def save_ai_report(report_text:str) -> None:
-    AI_REPORT_PATH.write_text(
+def save_ai_report(report_text:str,
+                   report_path:Path,
+) -> None:
+    report_path = Path(report_path)
+
+    report_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    report_path.write_text(
         report_text + "\n",
         encoding="utf-8",
     )
 
-def main():
-    report_context = load_report_context()
+def run_ai_report(
+    comparison_report_path: Path,
+    output_path: Path,
+) -> None:
+    report_context = load_report_context(
+        comparison_report_path
+    )
 
     ai_prompt = build_ai_prompt(
         report_context
@@ -150,11 +164,18 @@ def main():
     )
 
     save_ai_report(
-        ai_report
+        ai_report,
+        output_path,
     )
 
     print(
-        f"AI report saved to: {AI_REPORT_PATH}"
+        f"AI report saved to: {output_path}"
+    )
+
+def main():
+    run_ai_report(
+        COMPARISON_REPORT_PATH,
+        AI_REPORT_PATH,
     )
 
 

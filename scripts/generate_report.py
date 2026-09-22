@@ -14,9 +14,24 @@ PEAK_DAY_ENERGY_PATH = OUTPUT_DIR / "peak_day_energy.csv"
 
 REPORT_PATH = OUTPUT_DIR / "report.md"
 
-def load_report_data():
+def load_report_data(input_dir:Path):
+    input_dir = Path(input_dir)
+
+    basic_metrics_path = (
+        input_dir / "basic_metrics.csv"
+    )
+    energy_contribution_path = (
+        input_dir / "energy_contribution.csv"
+    )
+    monthly_energy_path = (
+        input_dir / "monthly_energy.csv"
+    )
+    peak_day_energy_path = (
+        input_dir / "peak_day_energy.csv"
+    )
+
     basic_metrics = load_plot_data(
-        BASIC_METRICS_PATH,
+        basic_metrics_path,
         [
             "metric",
             "annual_energy_kwh",
@@ -28,7 +43,7 @@ def load_report_data():
     )
 
     energy_contribution = load_plot_data(
-        ENERGY_CONTRIBUTION_PATH,
+        energy_contribution_path,
         [
             "component",
             "variable_name",
@@ -39,7 +54,7 @@ def load_report_data():
     )
 
     monthly_energy = load_plot_data(
-        MONTHLY_ENERGY_PATH,
+        monthly_energy_path,
         [
             "month",
             "cooling_kwh",
@@ -49,7 +64,7 @@ def load_report_data():
     )
 
     peak_day_energy = load_plot_data(
-        PEAK_DAY_ENERGY_PATH,
+        peak_day_energy_path,
         [
             "load_type",
             "peak_date",
@@ -256,19 +271,31 @@ def build_report(metrics):
 
     return "\n".join(lines)
 
-def save_report(report_text:str) -> None:
-    REPORT_PATH.write_text(
+def save_report(report_text:str,
+                report_path:Path,
+) -> None:
+    report_path = Path(report_path)
+
+    report_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    report_path.write_text(
         report_text,
         encoding="utf-8"
     )
 
-def main():
+def run_report(
+        input_dir: Path,
+        report_path:Path,
+) -> None:
     (
         basic_metrics,
         energy_contribution,
         monthly_energy,
         peak_day_energy,
-    ) = load_report_data()
+    ) = load_report_data(input_dir)
 
     metrics = extract_report_metrics(
         basic_metrics,
@@ -277,11 +304,25 @@ def main():
         peak_day_energy,
     )
 
-    report_text = build_report(metrics)
+    report_text = build_report(
+        metrics
+    )
 
-    save_report(report_text)
+    save_report(
+        report_text,
+        report_path,
+    )
 
-    print(f"Report generated: {REPORT_PATH}")
+    print(
+        f"Report saved to: {report_path}"
+    )
+
+
+def main():
+    run_report(
+        OUTPUT_DIR,
+        REPORT_PATH,
+    )
 
 
 if __name__ == "__main__":

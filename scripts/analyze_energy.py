@@ -649,17 +649,9 @@ def build_overview_text(
     return "\n".join(lines)
 
 # ------ 主要运行阶段 ------
-
-def main() -> None:
-    args = parse_arg()
-
-    input_path = resolve_path(args.input)
-    output_dir = resolve_path(args.output)
-
-    if not input_path.exists():
-        print(f"Input file not found: {input_path}")
-        print("Please put run_sql_export.xlsx into the data folder first.")
-        sys.exit(1)
+def run_analysis(input_path,output_dir):
+    input_path = Path(input_path)
+    output_dir = Path(output_dir)
 
     output_dir.mkdir(parents=True,exist_ok=True)
 
@@ -875,6 +867,21 @@ def main() -> None:
     print(f"Time rows: {len(time_df)}")
     print(f"Key variables found: {len(key_variables)}")
 
+def main() -> None:
+    args = parse_arg()
+
+    input_path = resolve_path(args.input)
+    output_dir = resolve_path(args.output)
+
+    if not input_path.exists():
+        print(f"Input file not found: {input_path}")
+        print("Please put run_sql_export.xlsx into the data folder first.")
+        sys.exit(1)
+
+    run_analysis(
+        input_path,
+        output_dir
+    )
 
 if __name__ == "__main__":
     main()

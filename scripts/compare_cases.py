@@ -309,14 +309,53 @@ def build_comparison_summary(
 
     return "\n".join(lines)
 
-def main():
+
+
+def run_comparison(
+    baseline_dir: Path,
+    candidate_dir: Path,
+    output_dir: Path,
+) -> None:
+    baseline_dir = Path(baseline_dir)
+    candidate_dir = Path(candidate_dir)
+    output_dir = Path(output_dir)
+
+    output_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    baseline_metrics_path = (
+        baseline_dir / "basic_metrics.csv"
+    )
+    candidate_metrics_path = (
+        candidate_dir / "basic_metrics.csv"
+    )
+
+    baseline_monthly_path = (
+        baseline_dir / "monthly_energy.csv"
+    )
+    candidate_monthly_path = (
+        candidate_dir / "monthly_energy.csv"
+    )
+
+    basic_comparison_path = (
+        output_dir / "basic_metrics_comparison.csv"
+    )
+    monthly_comparison_path = (
+        output_dir / "monthly_energy_comparison.csv"
+    )
+    comparison_summary_path = (
+        output_dir / "comparison_summary.md"
+    )
+
     baseline = load_basic_metrics(
-        BASELINE_METRICS_PATH,
+        baseline_metrics_path,
         "Baseline",
     )
 
     fixed_shading = load_basic_metrics(
-        FIXED_SHADING_METRICS_PATH,
+        candidate_metrics_path,
         "Fixed shading",
     )
 
@@ -325,32 +364,27 @@ def main():
         fixed_shading,
     )
 
-    COMPARISON_DIR.mkdir(
-        parents=True,
-            exist_ok=True
-    )
-
     comparison.to_csv(
-        BASIC_COMPARISON_PATH,
+        basic_comparison_path,
         index=False,
     )
 
     baseline_monthly = load_monthly_energy(
-        BASELINE_MONTHLY_PATH,
-        "Baseline"
+        baseline_monthly_path,
+        "Baseline",
     )
     fixed_shading_monthly = load_monthly_energy(
-        FIXED_SHADING_MONTHLY_PATH,
+        candidate_monthly_path,
         "Fixed shading",
     )
 
     monthly_comparison = create_monthly_energy_comparison(
         baseline_monthly,
-        fixed_shading_monthly
+        fixed_shading_monthly,
     )
 
     monthly_comparison.to_csv(
-        MONTHLY_COMPARISON_PATH,
+        monthly_comparison_path,
         index=False,
     )
 
@@ -363,27 +397,36 @@ def main():
         monthly_summary,
     )
 
-    COMPARISON_SUMMARY_PATH.write_text(
+    comparison_summary_path.write_text(
         comparison_summary,
-        encoding = "utf-8"
+        encoding="utf-8",
     )
 
     print(
         f"Basic metrics comparison saved: "
-        f"{BASIC_COMPARISON_PATH}"
+        f"{basic_comparison_path}"
     )
 
     print(
         f"Monthly energy comparison saved: "
-        f"{MONTHLY_COMPARISON_PATH}"
+        f"{monthly_comparison_path}"
     )
 
     print(monthly_summary)
 
     print(
-    f"Comparison summary saved: "
-    f"{COMPARISON_SUMMARY_PATH}"
+        f"Comparison summary saved: "
+        f"{comparison_summary_path}"
     )
+
+
+def main():
+    run_comparison(
+        BASELINE_DIR,
+        FIXED_SHADING_DIR,
+        COMPARISON_DIR,
+    )
+
 
 if __name__ == "__main__":
     main()
