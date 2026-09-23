@@ -210,6 +210,76 @@ The Docker image contains the Python environment, project code, Streamlit applic
 
 Raw simulation files and large intermediate datasets are excluded from the Docker build context.
 
+## CLI Usage
+
+The project provides a unified command-line interface for the main analysis workflow.
+
+### Analyze an EnergyPlus workbook
+
+```bash
+python scripts/cli.py analyze \
+  --input data/cases/baseline/run_sql_export.xlsx \
+  --output output/cases/baseline
+```
+
+This command processes the EnergyPlus result workbook and generates structured analysis outputs such as annual metrics, monthly energy demand, heat gain contributions, and peak-day profiles.
+
+### Compare two simulation cases
+
+```bash
+python scripts/cli.py compare \
+  --baseline output/cases/baseline \
+  --candidate output/cases/fixed_shading \
+  --output output/comparison
+```
+
+This command compares previously analyzed simulation cases and generates comparison CSV files and a Markdown summary.
+
+### Generate a deterministic report
+
+```bash
+python scripts/cli.py report \
+  --input output/cases/baseline \
+  --output output/cases/baseline/report.md
+```
+
+The report is generated directly from validated analysis results without using an AI model.
+
+### Generate an AI-assisted report
+
+Create a `.env` file in the project root:
+
+```text
+DEEPSEEK_API_KEY=your_api_key
+```
+
+The `.env` file is excluded from Git and should never be committed.
+
+Then run:
+
+```bash
+python scripts/cli.py ai-report \
+  --input output/comparison/comparison_summary.md \
+  --output output/comparison/ai_report.md
+```
+
+The numerical analysis is performed by Python. The AI layer is only used to interpret and organize the validated results into report-style text.
+
+### CLI Help
+
+```bash
+python scripts/cli.py --help
+```
+
+Individual commands also provide their own help:
+
+```bash
+python scripts/cli.py analyze --help
+python scripts/cli.py compare --help
+python scripts/cli.py report --help
+python scripts/cli.py ai-report --help
+```
+
 ## Tech Stack
 
 - Python 3.14
