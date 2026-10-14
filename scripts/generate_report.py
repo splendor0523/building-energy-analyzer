@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from plot_energy import load_plot_data
@@ -314,7 +315,7 @@ def run_report(
     )
 
     print(
-        f"Report saved to: {report_path}"
+        f"Report saved to: {report_path}",file=sys.stderr
     )
 
 
