@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 from mcp.server import MCPServer
-
+from contextlib import redirect_stdout
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parent.parent
@@ -10,6 +10,8 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0,str(SCRIPTS_DIR))
 
 from generate_report import run_report
+from compare_cases import run_comparison
+from analyze_energy import run_analysis
 
 mcp = MCPServer("Building Energy Analyzer")
 
@@ -30,6 +32,95 @@ def generate_report(input_dir: str, output_path: str) -> dict[str,str]:
     return {
         "status": "success",
         "output_path": str(destination)
+    }
+
+@mcp.tool()
+def compare_cases(
+    baseline_dir: str,
+    candidate_dir: str,
+    output_dir: str,
+) -> dict[str, str | list[str]]:
+    """Compare previously analyzed no-shading and fixed-shading EnergyPlus cases."""
+    baseline = (ROOT / baseline_dir).resolve()
+    candidate = (ROOT / candidate_dir).resolve()
+    destination = (ROOT / output_dir).resolve()
+
+    # Restrict AI-controlled paths to the project output directory.
+    output_root = (ROOT / "output").resolve()
+    for directory in (baseline,candidate,destination):
+        if not directory.is_relative_to(output_root):
+            raise ValueError("Paths must stay inside the project output directory.")
+
+    for directory in (baseline,candidate):
+        for filename in("basic_metrics.csv", "monthly_energy.csv"):
+            if not (directory / filename).is_file():
+                raise FileNotFoundError(f"Missing: {directory / filename}")
+
+    with redirect_stdout(sys.stderr):
+        run_comparison(baseline,candidate,destination)
+
+        filenames = [
+            "basic_metrics_comparison.csv",
+            "monthly_energy_comparison.csv",
+            "comparison_summary.md",
+        ]
+
+    for filename in filenames:
+        if not (destination / filename).is_file():
+            raise RuntimeError(f"Missing output: {destination / filename}")
+
+    return {
+        "status": "success",
+        "output_dir": str(destination),
+        "generated_files": [str(destination / name) for name in filenames],
+    }
+
+@mcp.tool()
+def analyze_energy(
+    input_path:str,
+    output_dir:str,
+) -> dict[str,str | list [str]]:
+    """Analyze an EnergyPlus Excel workbook and generate structured energy results."""
+    source = (ROOT / input_path).resolve()
+    destination = (ROOT / output_dir).resolve()
+
+    data_root = (ROOT / "data").resolve()
+    output_root = (ROOT / "output").resolve()
+
+    if not source.is_relative_to(data_root):
+        raise ValueError("Input must be inside the project data directory.")
+
+    if not destination.is_relative_to(output_root):
+        raise ValueError("Output must be inside the project output directory.")
+
+    if not source.is_file():
+        raise FileNotFoundError(f"Input file not found: {source}")
+
+    if source.suffix.lower() != ".xlsx":
+        raise ValueError("Input must be an .xlsx file.")
+
+    with redirect_stdout(sys.stderr):
+        run_analysis(source,destination)
+    
+    filenames = [
+        "basic_metrics.csv",
+        "monthly_energy.csv",
+        "energy_contribution.csv",
+        "peak_day_energy.csv",
+        "selected_report_data.csv",
+        "key_variables.csv",
+        "workbook_overview.txt",
+    ]
+
+    for filename in filenames:
+        if not (destination / filename).is_file():
+            raise RuntimeError(f"Missing output: {destination / filename}")
+
+    return {
+        "status": "success",
+        "input_path": str(source),
+        "output_dir": str(destination),
+        "generated_files": [str(destination / name) for name in filenames],
     }
 
 if __name__ == "__main__":

@@ -31,5 +31,16 @@ async def main():
         print("Is error:", result.is_error)
         print("Structured result:", result.structured_content)
 
+        comparison_result = await client.call_tool(
+             "compare_cases",
+            {
+                "baseline_dir": "output/cases/baseline",
+                "candidate_dir": "output/cases/fixed_shading",
+                "output_dir": "output/comparison/mcp_smoke",
+            },
+        )
+        print("\nComparison is error:", comparison_result.is_error)
+        print("Comparison result:", comparison_result.structured_content)
+
 if __name__ == "__main__":
     asyncio.run(main())
