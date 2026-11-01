@@ -3,15 +3,16 @@ from pathlib import Path
 from mcp.server import MCPServer
 from contextlib import redirect_stdout
 
+from generate_report import run_report
+from compare_cases import run_comparison
+from analyze_energy import run_analysis
+from mcp.server.mcpserver.exceptions import ToolError
+
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parent.parent
 
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0,str(SCRIPTS_DIR))
-
-from generate_report import run_report
-from compare_cases import run_comparison
-from analyze_energy import run_analysis
 
 mcp = MCPServer("Building Energy Analyzer")
 
@@ -21,8 +22,25 @@ def generate_report(input_dir: str, output_path: str) -> dict[str,str]:
     source = (ROOT / input_dir).resolve()
     destination = (ROOT / output_path).resolve()
 
+    output_root = (ROOT / "output").resolve()
+
+    if not source.is_relative_to(output_root):
+        raise ValueError("Input must be inside the project output directory")
+
+    if not destination.is_relative_to(output_root):
+        raise ValueError("Output must be inside the project output directory.")
+
+    if destination.suffix.lower() != ".md":
+        raise ValueError("Report output must be a Markdown file.")
+
     if not source.is_dir():
         raise FileNotFoundError(f"Input directory not found: {source}")
+
+    if destination.exists():
+        raise ToolError(
+            f"Report already exists: {destination}. "
+            "Choose a new output filename"
+        )
 
     run_report(source,destination)
 
@@ -40,7 +58,7 @@ def compare_cases(
     candidate_dir: str,
     output_dir: str,
 ) -> dict[str, str | list[str]]:
-    """Compare previously analyzed no-shading and fixed-shading EnergyPlus cases."""
+    """Compare no-shading and fixed-shading EnergyPlus cases and return a result summary."""
     baseline = (ROOT / baseline_dir).resolve()
     candidate = (ROOT / candidate_dir).resolve()
     destination = (ROOT / output_dir).resolve()
@@ -56,6 +74,13 @@ def compare_cases(
             if not (directory / filename).is_file():
                 raise FileNotFoundError(f"Missing: {directory / filename}")
 
+    if destination.exists():
+        if not destination.is_dir() or any(destination.iterdir()):
+            raise ToolError(
+                f"Output directory is not empty or is not a directory: "
+                f"{destination}. Choose a new empty output directory."
+            )
+
     with redirect_stdout(sys.stderr):
         run_comparison(baseline,candidate,destination)
 
@@ -69,10 +94,14 @@ def compare_cases(
         if not (destination / filename).is_file():
             raise RuntimeError(f"Missing output: {destination / filename}")
 
+    summary_path = destination / "comparison_summary.md"
+    summary_text = summary_path.read_text(encoding="utf-8")
+
     return {
         "status": "success",
         "output_dir": str(destination),
         "generated_files": [str(destination / name) for name in filenames],
+        "summary_text":summary_text,
     }
 
 @mcp.tool()
@@ -94,10 +123,17 @@ def analyze_energy(
         raise ValueError("Output must be inside the project output directory.")
 
     if not source.is_file():
-        raise FileNotFoundError(f"Input file not found: {source}")
+        raise ToolError(f"Input file not found: {source}")
 
     if source.suffix.lower() != ".xlsx":
         raise ValueError("Input must be an .xlsx file.")
+
+    if destination.exists():
+        if not destination.is_dir() or any(destination.iterdir()):
+            raise ToolError(
+                f"Output directory is not empty or is not a directory: "
+                f"{destination}. Choose a new empty output directory."
+            )
 
     with redirect_stdout(sys.stderr):
         run_analysis(source,destination)

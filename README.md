@@ -1,218 +1,154 @@
 # Building Energy Result Analyzer
 
-A Python-based analysis and visualization tool for EnergyPlus building simulation results.
+A Python-based toolkit for processing, comparing, visualizing, and reporting EnergyPlus building simulation results. It combines deterministic energy analysis with a Streamlit dashboard, a command-line interface (CLI), and Model Context Protocol (MCP) tools that can be called by an AI client.
 
-The project processes EnergyPlus result data exported through Honeybee / Grasshopper workflows and converts large simulation datasets into clear energy metrics, charts, and an interactive Streamlit dashboard.
+The project originated from a Honeybee / Grasshopper / EnergyPlus workflow. Its purpose is to turn large simulation result tables into structured, interpretable, and reusable outputs without relying on an AI model to perform numerical calculations.
 
 ## Overview
 
-Building simulation result files can contain millions of records and hundreds of output variables, making direct inspection difficult.
+EnergyPlus result exports can contain millions of records spread across several tables. Manually locating variables, reconstructing hourly timestamps, and comparing simulation cases can be time-consuming.
 
-This project provides a reusable analysis workflow for extracting and organizing key building energy indicators, including:
+This project provides a workflow to:
 
-- Annual cooling and heating demand
-- Peak hourly cooling and heating demand
-- Peak load time intervals
-- Heat gain contribution analysis
-- Monthly cooling and heating demand
-- Peak-day hourly profiles
-- Interactive result browsing with Streamlit
-- Docker-based deployment
+- Read EnergyPlus result tables exported to an Excel workbook.
+- Extract selected cooling, heating, and heat-gain variables.
+- Validate and reconstruct hourly time series.
+- Calculate annual, monthly, and peak-hour energy indicators.
+- Generate CSV results, charts, and Markdown reports.
+- Compare a no-shading baseline with a fixed-shading candidate case.
+- Explore results through a Streamlit dashboard or CLI.
+- Expose existing analysis functions as MCP tools for AI-assisted workflows.
 
 ## Dashboard
 
-![Building Energy Result Analyzer Dashboard](docs/images/dashboard_overview.png)
+![Building Energy Result Analyzer dashboard](docs/images/dashboard_overview.png)
 
-## Project Background
+The Streamlit dashboard supports exploration of annual and monthly energy demand, peak-hour metrics, selected heat-gain contributions, and peak-day profiles.
 
-This project is built from an architecture and building performance simulation workflow. The target use case is to process building energy simulation result files and convert them into clear indicators, charts, and reports.
+## Project Status and Scope
 
-Typical indicators may include:
+The **v1.0 feature set** includes single-case analysis, two-case comparison, deterministic reporting, AI-assisted reporting, chart generation, Streamlit visualization, Docker-based dashboard execution, CLI commands, and an MCP server with an AI client.
 
-- Cooling load
-- Heating load
-- Solar heat gain
-- Lighting load
-- Equipment load
-- Indoor air temperature
-- Monthly energy use
-- Peak load time
-- Baseline vs shading strategy comparison
+The MCP server exposes three tools. The AI client accepts a natural-language request, discovers the available tools, and can make multiple tool calls as required by a task. Tool calls operate on local project files, and generated outputs are protected against accidental overwriting through MCP.
 
-## Current Status
+This is a research-oriented and personal engineering project, not a production-grade, multi-user energy management system. See [Scope and Limitations](#scope-and-limitations).
 
-Day 15: Project initialization.
+## Features
 
-The current version only includes the basic project structure. Data reading and analysis scripts will be added in the following days.
+### Energy analysis
 
-## Project Structure 
+- Extract relevant values from large EnergyPlus `ReportData` tables.
+- Validate and repair the time index used in the project's source dataset.
+- Calculate annual cooling and heating thermal demand.
+- Aggregate monthly cooling and heating demand.
+- Identify peak **hourly energy** values and the associated time intervals.
+- Analyze selected heat-gain contributions.
+- Extract peak-day hourly profiles and export structured CSV results.
+
+### Interfaces and reporting
+
+- Generate reusable Matplotlib charts.
+- Browse results in Streamlit.
+- Run analysis, comparison, and reports with a unified CLI.
+- Generate deterministic Markdown reports from computed results.
+- Generate AI-assisted narrative reports from existing analysis summaries.
+- Run the dashboard using Docker.
+
+### MCP integration
+
+- Register `analyze_energy`, `compare_cases`, and `generate_report` as MCP tools.
+- Connect to the local MCP server using standard input/output (stdio).
+- Translate tool schemas for an OpenAI-compatible model API.
+- Accept natural-language tasks in the AI client.
+- Execute multiple tool calls, pass results back to the model, and handle tool-level errors.
+- Reject MCP output requests that would overwrite existing files or non-empty output directories.
+
+## Project Structure
 
 ```text
 building-energy-analyzer/
-├── app.py                     # Streamlit dashboard
+├── app.py                          # Streamlit dashboard
 ├── scripts/
-│   ├── analyze_energy.py      # Data extraction, cleaning, and analysis
-│   └── plot_energy.py         # Visualization and chart generation
-├── data/                      # Raw EnergyPlus export files
-├── output/                    # Generated CSV results and charts
+│   ├── analyze_energy.py           # EnergyPlus workbook analysis
+│   ├── plot_energy.py              # Chart generation
+│   ├── compare_cases.py            # Two-case comparison
+│   ├── generate_report.py          # Deterministic Markdown report
+│   ├── generate_ai_report.py       # AI-assisted report generation
+│   ├── cli.py                      # Command-line interface
+│   ├── mcp_server.py               # MCP tool server
+│   └── ai_mcp_client.py            # Natural-language AI/MCP client
+├── tests/
+│   ├── smoke_mcp.py                # Repeatable MCP smoke test
+│   └── integration_mcp_analyze.py  # Analysis-tool integration check
+├── data/                            # Local raw inputs (not committed)
+│   └── cases/
+├── output/                          # Local generated results (not committed)
+│   ├── cases/
+│   └── comparison/
 ├── docs/
-│   └── images/                # README showcase images
-├── Dockerfile                 # Docker image definition
+│   └── images/                      # Documentation images
+├── Dockerfile
 ├── .dockerignore
 ├── .gitignore
 ├── requirements.txt
 └── README.md
 ```
 
-## Analysis Workflow
+The tree shows the principal source files and logical data directories. The `data/` and `output/` contents are local artifacts and are not distributed with the source repository.
 
-The project separates data processing, visualization, and dashboard presentation into different stages:
-
-```text
-EnergyPlus / Honeybee / Grasshopper export
-                ↓
-     Excel workbook with SQL tables
-                ↓
-   ReportData + Dictionary + Time
-                ↓
-      Data extraction and cleaning
-                ↓
-   TimeIndex validation and repair
-                ↓
-     Hourly energy time series
-                ↓
- Annual / monthly / peak-day metrics
-                ↓
-        CSV analysis results
-                ↓
-     Matplotlib chart generation
-                ↓
-       Streamlit Dashboard
-```
-
-`analyze_energy.py` handles data extraction, validation, time processing, and metric calculation.  
-`plot_energy.py` reads structured analysis results and generates reusable charts.  
-`app.py` focuses on result presentation and interaction without duplicating the core analysis logic.
-
-## Key Analysis Results
-
-Using the current EnergyPlus simulation dataset, the analyzer produced the following representative results:
-
-| Metric | Result |
-| --- | ---: |
-| Annual cooling demand | 5.12 GWh |
-| Annual heating demand | 6.21 GWh |
-| Peak hourly cooling demand | 5,335.64 kWh |
-| Cooling peak interval | 2006-07-09 15:00–16:00 |
-| Peak hourly heating demand | 6,188.38 kWh |
-| Heating peak interval | 2006-01-09 05:00–06:00 |
-| Peak cooling month | July, 1.79 GWh |
-| Peak heating month | January, 1.74 GWh |
-
-## Features
-
-- Read and validate EnergyPlus result data exported to Excel
-- Extract key variables from large ReportData tables
-- Repair and validate hourly time indices
-- Calculate annual cooling and heating demand
-- Identify peak hourly cooling and heating demand
-- Analyze selected heat gain contributions
-- Aggregate monthly cooling and heating demand
-- Extract peak-day 24-hour profiles
-- Generate reusable Matplotlib charts
-- Present results in an interactive Streamlit dashboard
-- Run the dashboard in a Docker container
-
-## Running the Project
-
-### 1. Install Dependencies
-
-Create and activate a Python virtual environment, then install the required packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-The main dependencies include pandas, openpyxl, matplotlib, and Streamlit.
-
-### 2. Run the Energy Analysis
-
-Place the local EnergyPlus export workbook in the project's `data/` directory, then run:
-
-```bash
-python scripts/analyze_energy.py
-```
-
-The analysis script reads the EnergyPlus result tables, validates and repairs time information, extracts key variables, calculates energy metrics, and generates structured CSV results in the `output/` directory.
-
-Large raw simulation files are not included in this repository.
-
-### 3. Generate Charts
-
-After the analysis results have been generated, run:
-
-```bash
-python scripts/plot_energy.py
-```
-
-This creates reusable visualization files for:
-
-- Heat gain contributions
-- Monthly cooling and heating demand
-- Peak-day hourly energy profiles
-
-The generated charts are stored in the `output/` directory.
-
-### 4. Run the Streamlit Dashboard
-
-Start the dashboard with:
-
-```bash
-python -m streamlit run app.py
-```
-
-Then open:
+## How the Analysis Works
 
 ```text
-http://localhost:8501
+EnergyPlus / Honeybee / Grasshopper
+                |
+                v
+  Excel export of SQL result tables
+                |
+                v
+    Variable selection and cleaning
+                |
+                v
+     TimeIndex reconstruction
+                |
+                v
+         Hourly time series
+                |
+                v
+  Annual / monthly / peak-day metrics
+                |
+                v
+        Structured CSV results
+          /       |        \
+         v        v         v
+      Charts   Reports   Case comparison
+         \        |         /
+          v       v        v
+      Dashboard / CLI / MCP tools
 ```
 
-The dashboard presents:
+The numerical calculations are carried out by Python analysis modules. The AI layer can select tools and explain their outputs, but it does not replace the deterministic calculations.
 
-- Annual cooling and heating demand
-- Peak hourly demand and time intervals
-- Heat gain contributions
-- Monthly cooling and heating demand
-- Peak-day hourly profiles
-- Interactive cooling / heating result browsing
+## Requirements and Installation
 
-### 5. Run with Docker
+Use a compatible Python environment; this project has been developed and tested locally with **Python 3.14**.
 
-Build the Docker image:
+From the repository root:
 
 ```bash
-docker build -t building-energy-dashboard .
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-Run the container:
+On Windows, activate the virtual environment with the appropriate shell command instead of `source`.
 
-```bash
-docker run --rm -p 8501:8501 building-energy-dashboard
-```
+Important dependencies include `pandas`, `openpyxl`, `matplotlib`, `streamlit`, `mcp`, `openai`, and `python-dotenv`. The repository's `requirements.txt` provides the pinned dependency versions used by the project.
 
-Then open:
-
-```text
-http://localhost:8501
-```
-
-The Docker image contains the Python environment, project code, Streamlit application, and the analysis results required by the dashboard.
-
-Raw simulation files and large intermediate datasets are excluded from the Docker build context.
+Raw EnergyPlus exports and generated analysis files are **not** included in the repository. Supply your own compatible workbook and generate analysis results before using commands that depend on them.
 
 ## CLI Usage
 
-The project provides a unified command-line interface for the main analysis workflow.
+The CLI wraps the existing Python analysis and reporting functions. Run the following commands from the repository root.
 
 ### Analyze an EnergyPlus workbook
 
@@ -222,9 +158,9 @@ python scripts/cli.py analyze \
   --output output/cases/baseline
 ```
 
-This command processes the EnergyPlus result workbook and generates structured analysis outputs such as annual metrics, monthly energy demand, heat gain contributions, and peak-day profiles.
+This generates analysis outputs such as annual metrics, monthly demand, selected heat-gain contributions, and peak-day results.
 
-### Compare two simulation cases
+### Compare two previously analyzed cases
 
 ```bash
 python scripts/cli.py compare \
@@ -233,7 +169,7 @@ python scripts/cli.py compare \
   --output output/comparison
 ```
 
-This command compares previously analyzed simulation cases and generates comparison CSV files and a Markdown summary.
+Both input directories must already contain compatible analysis results. The comparison generates CSV tables and `comparison_summary.md`.
 
 ### Generate a deterministic report
 
@@ -243,17 +179,15 @@ python scripts/cli.py report \
   --output output/cases/baseline/report.md
 ```
 
-The report is generated directly from validated analysis results without using an AI model.
+The report is generated from analysis results without an AI model.
 
 ### Generate an AI-assisted report
 
-Create a `.env` file in the project root:
+Create a local `.env` file in the project root:
 
-```text
+```dotenv
 DEEPSEEK_API_KEY=your_api_key
 ```
-
-The `.env` file is excluded from Git and should never be committed.
 
 Then run:
 
@@ -263,148 +197,237 @@ python scripts/cli.py ai-report \
   --output output/comparison/ai_report.md
 ```
 
-The numerical analysis is performed by Python. The AI layer is only used to interpret and organize the validated results into report-style text.
+The AI report uses a previously generated summary; the underlying energy calculations remain deterministic. Never commit your `.env` file or API key.
 
-### CLI Help
+### CLI help
 
 ```bash
 python scripts/cli.py --help
-```
-
-Individual commands also provide their own help:
-
-```bash
 python scripts/cli.py analyze --help
 python scripts/cli.py compare --help
 python scripts/cli.py report --help
 python scripts/cli.py ai-report --help
 ```
 
-## Tech Stack
+## MCP Integration
 
-- Python 3.14
-- pandas
-- openpyxl
-- matplotlib
-- Streamlit
-- Docker
-- Git / GitHub
-- EnergyPlus
-- Honeybee
-- Grasshopper
+The MCP server in `scripts/mcp_server.py` exposes existing analysis functions as tools. The AI client in `scripts/ai_mcp_client.py` starts the server as a local subprocess using **stdio**, discovers the registered tools, and exchanges tool requests and results with a model through an OpenAI-compatible API.
 
-## Data Processing Notes
+### Available MCP tools
 
-The current project is based on an EnergyPlus SQL result workbook exported through a Honeybee / Grasshopper workflow.
+| Tool | Inputs | What it does |
+| --- | --- | --- |
+| `analyze_energy` | `input_path`, `output_dir` | Analyzes an EnergyPlus Excel workbook and exports structured results. |
+| `compare_cases` | `baseline_dir`, `candidate_dir`, `output_dir` | Compares two analyzed cases and returns generated file paths plus a Markdown summary in `summary_text`. |
+| `generate_report` | `input_dir`, `output_path` | Generates a deterministic Markdown report from an existing analysis directory. |
 
-The original workbook contains multiple EnergyPlus result tables, including:
+The analysis tool returns output file paths, not the full contents of every generated file. The comparison tool additionally returns a textual summary, allowing the AI client to explain comparison results without claiming to have read the generated files directly.
 
-- `ReportData`
-- `ReportDataDictionary`
-- `Time`
-- `TabularData`
-- `Zones`
-- `Surfaces`
-- `Materials`
-- `Constructions`
+### Run the AI client
 
-The three `ReportData` tables contain more than two million records in total.
+First install dependencies as described above and set `DEEPSEEK_API_KEY` in the local `.env` file. The default client configuration uses DeepSeek's OpenAI-compatible API.
 
-Instead of loading every simulation variable into the final analysis workflow, the project first identifies relevant dictionary entries and extracts only the required EnergyPlus variables.
+Use a natural-language request as the single command-line argument:
 
-The time-processing workflow also validates EnergyPlus `TimeIndex` values before constructing the hourly time series. A missing hourly record discovered in the source `Time` table is explicitly identified and repaired before the final 8760-hour dataset is generated.
-
-EnergyPlus hourly timestamps represent the end of each simulation interval. For example:
-
-```text
-2006-07-09 16:00
+```bash
+python scripts/ai_mcp_client.py \
+  "Compare the analyzed cases in output/cases/baseline and output/cases/fixed_shading. Save the results in output/comparison/my_comparison_01 and explain the cooling and heating differences."
 ```
 
-represents the interval:
+The two analysis directories in this example must already exist. Choose a **new** output path for each run, because MCP tools reject overwriting existing results.
 
-```text
-2006-07-09 15:00–16:00
+You can also request more than one operation:
+
+```bash
+python scripts/ai_mcp_client.py \
+  "Compare baseline_dir=output/cases/baseline with candidate_dir=output/cases/fixed_shading, save to output/comparison/my_comparison_02, and generate a baseline report at output/cases/baseline/my_report_01.md. Explain the comparison."
 ```
 
-This time convention is taken into account when reporting peak-load intervals and extracting complete peak-day profiles.
+The model may call tools in multiple rounds. If a tool reports an error, the client can return that error to the model, which may then revise its request. The client should not treat an unsuccessful tool call as a successful result.
 
-## Output Data
+To inspect the command-line interface without contacting the API:
 
-The analysis workflow currently generates structured results including:
+```bash
+python scripts/ai_mcp_client.py --help
+```
+
+### MCP path and overwrite rules
+
+For MCP tool calls:
+
+- Excel inputs for `analyze_energy` must be `.xlsx` files located under `data/`.
+- Existing analysis inputs for `compare_cases` and `generate_report` must be located under `output/`.
+- Generated reports and analysis/comparison directories must be located under `output/`.
+- An existing Markdown report is not overwritten.
+- An existing non-empty output directory is not overwritten.
+
+These rules apply to the **MCP tool wrappers**. The CLI invokes the underlying business functions directly and should not be assumed to enforce the same overwrite policy.
+
+Tool descriptions are passed to the model, but tool execution is performed locally by Python. Use the AI client only with data and output locations you intend it to access.
+
+## Tests
+
+### MCP smoke test
+
+After generating the `baseline` and `fixed_shading` analysis results, run:
+
+```bash
+python tests/smoke_mcp.py
+```
+
+The smoke test checks that all three tools are registered, then verifies that:
+
+1. `generate_report` succeeds with a new report filename and rejects a repeated call to the same filename.
+2. `compare_cases` succeeds with a new output directory and rejects a repeated call to the same directory.
+3. The expected output files are generated.
+
+It uses a temporary directory under `output/` and cleans up its own test files. Successful execution ends with:
 
 ```text
-output/
+PASS: MCP smoke tests
+```
+
+The SDK may print informational messages for the **intentionally rejected** second calls. Those messages are expected when the overall test passes.
+
+### Analysis integration check
+
+`tests/integration_mcp_analyze.py` exercises the `analyze_energy` MCP tool against the local baseline workbook. It requires the corresponding raw dataset and may process millions of rows when run with a new destination.
+
+The script in the current project uses a fixed output location, so a repeated run may return a deliberate overwrite error rather than perform a new analysis. It is not the lightweight, repeatable smoke test described above.
+
+## Streamlit Dashboard
+
+Start the local dashboard:
+
+```bash
+python -m streamlit run app.py
+```
+
+Open:
+
+```text
+http://localhost:8501
+```
+
+The dashboard requires the structured results expected by `app.py` to be available locally. Analyze the relevant dataset first when those outputs have not yet been generated.
+
+## Docker
+
+Build and run the dashboard container:
+
+```bash
+docker build -t building-energy-dashboard .
+docker run --rm -p 8501:8501 building-energy-dashboard
+```
+
+Open `http://localhost:8501` in your browser.
+
+Docker packages the application runtime. The availability of dashboard data depends on the image/build configuration and the analysis results provided to the application; raw workbooks and large intermediate datasets are not distributed with the source repository.
+
+## Generated Data
+
+A single-case analysis produces structured outputs such as:
+
+```text
+output/cases/baseline/
 ├── basic_metrics.csv
-├── energy_contribution.csv
 ├── monthly_energy.csv
+├── energy_contribution.csv
 ├── peak_day_energy.csv
-├── energy_contribution.png
-├── monthly_energy.png
-└── peak_day_energy.png
+├── selected_report_data.csv
+├── key_variables.csv
+└── workbook_overview.txt
 ```
 
-Generated outputs and large simulation files are excluded from Git version control.
+Chart generation can additionally produce images such as `energy_contribution.png`, `monthly_energy.png`, and `peak_day_energy.png`.
 
-The repository keeps only source code, documentation, configuration files, and selected showcase images.
+A comparison produces:
 
-## Interpretation Notes
+```text
+output/comparison/example/
+├── basic_metrics_comparison.csv
+├── monthly_energy_comparison.csv
+└── comparison_summary.md
+```
 
-The cooling and heating results currently use the following EnergyPlus Ideal Loads variables:
+Actual directory names depend on the selected CLI or MCP arguments.
+
+## Example Analysis Results
+
+The following figures are **representative results from an earlier single-case analysis**, retained from the original project documentation. They are not necessarily the values of the later `baseline`/`fixed_shading` comparison datasets.
+
+| Metric | Example result |
+| --- | ---: |
+| Annual cooling demand | 5.12 GWh |
+| Annual heating demand | 6.21 GWh |
+| Peak hourly cooling energy | 5,335.64 kWh |
+| Cooling peak interval | 2006-07-09 15:00–16:00 |
+| Peak hourly heating energy | 6,188.38 kWh |
+| Heating peak interval | 2006-01-09 05:00–06:00 |
+| Peak cooling month | July, 1.79 GWh |
+| Peak heating month | January, 1.74 GWh |
+
+A separately tested no-shading versus fixed-shading comparison reported an annual cooling-demand change of **−616.69 MWh (−5.91%)** and a heating-demand change of **+130.88 MWh (+2.39%)**. These are example results for the tested case pair, not generalizable shading-performance estimates.
+
+## Data Processing and Interpretation Notes
+
+### Source tables and hourly timestamps
+
+The workflow uses tables exported from an EnergyPlus SQL result database, including `ReportData`, `ReportDataDictionary`, and `Time`. The original workbook may also contain `TabularData`, `Zones`, `Surfaces`, `Materials`, and `Constructions`.
+
+The source dataset contained more than two million `ReportData` records. The analyzer selects required variables rather than carrying every available simulation output into the final result tables.
+
+EnergyPlus hourly timestamps describe the **end** of each reporting interval. For example, a timestamp of `2006-07-09 16:00` represents the interval `2006-07-09 15:00–16:00`.
+
+The project's original time reconstruction included identifying and repairing a missing hourly time record. Input datasets should still be checked for missing or inconsistent time records; a nominal 8,760-hour year alone does not establish that every selected output variable has 8,760 valid observations.
+
+### Thermal demand versus HVAC electricity
+
+Cooling and heating metrics in the current analysis are based on the EnergyPlus Ideal Loads variables:
 
 ```text
 Zone Ideal Loads Supply Air Total Cooling Energy
 Zone Ideal Loads Supply Air Total Heating Energy
 ```
 
-Therefore, the reported values represent building cooling and heating demand under the Ideal Loads system.
+They describe **thermal energy demand**, not measured or simulated HVAC electricity consumption. Peak **hourly energy** is reported in **kWh**; it must not automatically be labeled as instantaneous power in **kW**.
 
-They should not be interpreted as actual HVAC electricity consumption.
+An energy-demand comparison by itself does not establish thermal comfort, daylight, glare performance, HVAC electricity savings, operating cost, or overall building performance.
 
-The heat gain contribution analysis currently includes four selected components:
+### Heat-gain contributions
+
+The selected heat-gain contribution analysis includes:
 
 - People
 - Lighting
 - Electric equipment
 - Window solar transmission
 
-The reported percentages represent the relative shares among these four selected components only.
+The percentages represent relative shares **among these selected components only**. They are not a full building heat balance or the fractions of whole-building energy consumption.
 
-They do not represent a complete building heat balance or total building energy consumption.
+## Scope and Limitations
 
-## Current Scope
+- The current input workflow expects an EnergyPlus SQL export represented as an Excel workbook with the tables and fields used by the analyzer; arbitrary workbook layouts are not supported.
+- The current comparison workflow is implemented and labeled for a **no-shading baseline** and a **fixed-shading candidate**. It should not be presented as a validated generic multi-scenario comparison engine.
+- The AI client can discover three MCP tools and execute multiple calls, but successful execution of every possible multi-step analysis chain has not been exhaustively tested.
+- The AI client can explain text returned by tools; a returned file path alone does not imply that the model opened or read that file.
+- MCP output paths are restricted to designated project directories, and overwrite attempts are rejected. This does not constitute a full security review for untrusted or multi-user deployment.
+- The repository does not include raw simulation data, API keys, or generated analysis datasets.
+- Further validation is necessary before treating outputs from new simulation models as research conclusions.
 
-The current version focuses on processing and presenting results from a single EnergyPlus simulation dataset.
+## Technology Stack
 
-Implemented capabilities include:
-
-- Large EnergyPlus result-table extraction
-- Data validation and cleaning
-- Hourly time-series reconstruction
-- Annual energy metrics
-- Peak-load identification
-- Selected heat gain contribution analysis
-- Monthly aggregation
-- Peak-day profile extraction
-- Matplotlib visualization
-- Streamlit dashboard
-- Docker deployment
-
-## Planned Development
-
-Future development will focus on extending the analyzer from single-case analysis to reusable simulation comparison workflows.
-
-Planned directions include:
-
-- Baseline vs. shading strategy comparison
-- Multiple simulation case comparison
-- Automatic Markdown report generation
-- Automated interpretation of structured results
-- Command-line interface
-- AI-assisted report generation
-- Integration with larger building-performance analysis workflows
+- Python 3.14
+- pandas, NumPy, openpyxl
+- Matplotlib
+- Streamlit
+- Docker
+- Model Context Protocol (MCP), stdio transport
+- OpenAI-compatible API client (DeepSeek)
+- python-dotenv
+- Git and GitHub
+- EnergyPlus, Honeybee, Grasshopper (simulation workflow)
 
 ## Project Purpose
 
-This project is part of an ongoing exploration of combining architectural and building-performance knowledge with data analysis, software engineering, and AI-assisted workflows.
-
-The goal is not only to visualize simulation outputs, but to gradually develop a reusable toolchain for turning complex building simulation data into structured, interpretable, and reproducible analysis results.
+This project is part of a practical learning and engineering workflow connecting architectural simulation, data analysis, Python software development, and AI tool integration. The aim is a reusable, inspectable pipeline that turns complex simulation exports into structured evidence, visualizations, comparisons, and reports while keeping numerical computation separate from AI-generated interpretation.
